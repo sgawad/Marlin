@@ -787,7 +787,7 @@ void tp_init()
   TIMSK0 |= (1<<OCIE0B);  
   
   // Wait for temperature measurement to settle
-  delay(250);
+  delay(1);
 
 #ifdef HEATER_0_MINTEMP
   minttemp[0] = HEATER_0_MINTEMP;
