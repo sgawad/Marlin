@@ -13,6 +13,13 @@
 #define E1_MS2_PIN -1
 #define DIGIPOTSS_PIN -1
 
+//for highlighting purpose
+ #define MOTHERBOARD 33
+ //#define DOGLCD
+ //#define U8GLIB_ST7920
+ //#define REPRAP_DISCOUNT_SMART_CONTROLLER
+ #define DCXYMOT
+
 #if MOTHERBOARD == 99
 #define KNOWN_BOARD 1
 
@@ -310,9 +317,44 @@
 
 
 // uncomment one of the following lines for RAMPS v1.3 or v1.0, comment both for v1.2 or 1.1
-// #define RAMPS_V_1_3
+ #define RAMPS_V_1_3
 // #define RAMPS_V_1_0
+#ifdef DCXYMOT
+// X encoder Pin + Int + Var def
+	#define c_XEncoderInterrupt 4
+	#define c_XEncoderPinA 19
+	#define c_XEncoderPinB 25
+	#define c_XEncoderPinI 22
+// Y encoder Pins
+	#define c_YEncoderInterrupt 5
+	#define c_YEncoderPinA 18
+	#define c_YEncoderPinB 24
+	//Ardino motor shield REV3
+	//Function			pins per Ch. A	pins per Ch. B
+	//Direction			D12				D13
+	//PWM				D3				D11
+	//Brake				D9				D8
+	//Current Sensing	A0				A1
+	#define X_DIR_PIN 12
+	#define Y_DIR_PIN 13
+	#define X_PWM_PIN 3
+	#define Y_PWM_PIN 11
+	
+	//JTAG CONNECTION
+	//+5v	+5v
+	//GND	GND
+	//4	TCK
+	//5	TMS
+	//6	TDO
+	//7	TDI
 
+	
+#endif
+// temporary joy pins
+#define X_JOY_UP           26
+#define X_JOY_DOWN         28
+#define Y_JOY_UP           37
+#define Y_JOY_DOWN         38
 
 #if MOTHERBOARD == 33 || MOTHERBOARD == 34 || MOTHERBOARD == 35 || MOTHERBOARD == 77
 
@@ -356,18 +398,19 @@
     #define BEEPER             33    
 
   #else
-
+/*
     #define X_STEP_PIN         54
     #define X_DIR_PIN          55
-    #define X_ENABLE_PIN       38
-    #define X_MIN_PIN           3
-    #define X_MAX_PIN           2
-
+    #define X_ENABLE_PIN       38*/
+    #define X_MIN_PIN          27   //was 3
+    #define X_MAX_PIN          29	//was 2
+/*
     #define Y_STEP_PIN         60
     #define Y_DIR_PIN          61
-    #define Y_ENABLE_PIN       56
-    #define Y_MIN_PIN          14
-    #define Y_MAX_PIN          15
+    #define Y_ENABLE_PIN       56*/
+    #define Y_MIN_PIN          35  //was 14
+    #define Y_MAX_PIN          36  //was 15
+
 
     #define Z_STEP_PIN         46
     #define Z_DIR_PIN          48
@@ -379,9 +422,13 @@
     #define Z2_DIR_PIN         34
     #define Z2_ENABLE_PIN      30
 
-    #define E0_STEP_PIN        26
+    /*
+	#define E0_STEP_PIN        26
     #define E0_DIR_PIN         28
-    #define E0_ENABLE_PIN      24
+    #define E0_ENABLE_PIN      24*/
+	#define E0_STEP_PIN        54   //conflicting with joystick to be set back actually
+	#define E0_DIR_PIN         55   // or use xstepper pins
+	#define E0_ENABLE_PIN      38	//shady
 
     #define E1_STEP_PIN        36
     #define E1_DIR_PIN         34
@@ -406,7 +453,7 @@
     #define CONTROLLERFAN_PIN  10 //Pin used for the fan to cool controller
   #endif
 
-  #define PS_ON_PIN          12
+  #define PS_ON_PIN          56          // POWER SUPPLY ON OR OFF  was 12
 
   #if defined(REPRAP_DISCOUNT_SMART_CONTROLLER) || defined(G3D_PANEL)
     #define KILL_PIN           41
@@ -434,8 +481,8 @@
     #define HEATER_2_PIN       6   
   #endif
 
-  #define TEMP_0_PIN         13   // ANALOG NUMBERING
-  #define TEMP_1_PIN         15   // ANALOG NUMBERING
+  #define TEMP_0_PIN         15   // ANALOG NUMBERING 13
+  #define TEMP_1_PIN         -1   // ANALOG NUMBERING 15
   #define TEMP_2_PIN         -1   // ANALOG NUMBERING
 
   #if MOTHERBOARD == 35
@@ -444,7 +491,7 @@
     #if MOTHERBOARD == 77
       #define HEATER_BED_PIN     9    // BED
     #else
-      #define HEATER_BED_PIN     8    // BED
+      #define HEATER_BED_PIN     8    // BED     conflicts with motor brake not planning to use it.
     #endif
   #endif
   #define TEMP_BED_PIN       14   // ANALOG NUMBERING
@@ -2162,7 +2209,7 @@
 #define Z_MIN_PIN          -1
 #endif
 
-#define SENSITIVE_PINS {0, 1, X_STEP_PIN, X_DIR_PIN, X_ENABLE_PIN, X_MIN_PIN, X_MAX_PIN, Y_STEP_PIN, Y_DIR_PIN, Y_ENABLE_PIN, Y_MIN_PIN, Y_MAX_PIN, Z_STEP_PIN, Z_DIR_PIN, Z_ENABLE_PIN, Z_MIN_PIN, Z_MAX_PIN, PS_ON_PIN, \
+#define SENSITIVE_PINS {0, 1,/*X_STEP_PIN, X_DIR_PIN, X_ENABLE_PIN, X_MIN_PIN, X_MAX_PIN, Y_STEP_PIN, Y_DIR_PIN, Y_ENABLE_PIN, Y_MIN_PIN, Y_MAX_PIN,*/ Z_STEP_PIN, Z_DIR_PIN, Z_ENABLE_PIN, Z_MIN_PIN, Z_MAX_PIN, PS_ON_PIN, \
                         HEATER_BED_PIN, FAN_PIN,                  \
                         _E0_PINS _E1_PINS _E2_PINS             \
                         analogInputToDigitalPin(TEMP_0_PIN), analogInputToDigitalPin(TEMP_1_PIN), analogInputToDigitalPin(TEMP_2_PIN), analogInputToDigitalPin(TEMP_BED_PIN) }

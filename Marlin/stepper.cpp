@@ -29,6 +29,9 @@
 #include "language.h"
 #include "cardreader.h"
 #include "speed_lookuptable.h"
+#include "digitalWriteFast.h"
+#include "VID_v1.h"
+#include "PID_v1.h"
 #if defined(DIGIPOTSS_PIN) && DIGIPOTSS_PIN > -1
 #include <SPI.h>
 #endif
@@ -43,7 +46,7 @@ block_t *current_block;  // A pointer to the block currently being traced
 //===========================================================================
 //=============================private variables ============================
 //===========================================================================
-//static makes it inpossible to be called from outside of this file by extern.!
+//static makes it impossible to be called from outside of this file by extern.!
 
 // Variables used by The Stepper Driver Interrupt
 static unsigned char out_bits;        // The next stepping-bits to be output
@@ -59,7 +62,7 @@ volatile static unsigned long step_events_completed; // The number of step event
 #endif
 static long acceleration_time, deceleration_time;
 //static unsigned long accelerate_until, decelerate_after, acceleration_rate, initial_rate, final_rate, nominal_rate;
-static unsigned short acc_step_rate; // needed for deccelaration start point
+static volatile unsigned short acc_step_rate; // needed for deceleration start point
 static char step_loops;
 static unsigned short OCR1A_nominal;
 static unsigned short step_loops_nominal;
@@ -84,6 +87,49 @@ static bool check_endstops = true;
 
 volatile long count_position[NUM_AXIS] = { 0, 0, 0, 0};
 volatile signed char count_direction[NUM_AXIS] = { 1, 1, 1, 1};
+	
+	//DC motor variables SG
+
+	// Quadrature encoders
+	// X encoder Int + Var def
+	volatile bool _XEncoderBSet;
+	volatile bool _XEncoderISet;
+	volatile long _XEncoderTicks = 0;
+	volatile long _XEncoderIndex = 0;
+	volatile unsigned long _XencoderRelPos=0;
+	volatile unsigned long _XencoderAbsPos=0;
+	volatile unsigned long _XencoderBlockStartPos=0;
+	volatile unsigned long _Xblock_start_=0;
+	volatile int _X_Curr_sens;
+	// X PID vars
+	long XPrevTick
+	double XVelocity=0;  //velocity input
+	double XVSetpoint, XVOutput;
+	// Y encoder Int + Var def
+	volatile bool _YEncoderBSet;
+	volatile bool _YEncoderISet;
+	volatile long _YEncoderTicks = 0;
+	volatile long _YEncoderIndex = 0;
+	volatile unsigned long _YencoderRelPos=0;
+	volatile unsigned long _YencoderAbsPos=0;
+	volatile unsigned long _YencoderBlockStartPos=0;
+	volatile unsigned long _Yblock_start_=0;
+	volatile int _Y_Curr_sens;
+	// Y PID vars
+	long YPrevTick
+	double YVelocity=0;  //velocity input
+	double YVSetpoint, YVOutput;
+
+	//STOPS and joystic //pin defs in PIN.h
+
+	volatile bool _XMinPinSet;
+	volatile bool _XMaxPinSet;
+	volatile bool _XJoyUp;
+	volatile bool _XJoyDown;
+	volatile bool _YMinPinSet;
+	volatile bool _YMaxPinSet;
+	volatile bool _YJoyUp;
+	volatile bool _YJoyDown;
 
 //===========================================================================
 //=============================functions         ============================
@@ -166,6 +212,45 @@ asm volatile ( \
 #define ENABLE_STEPPER_DRIVER_INTERRUPT()  TIMSK1 |= (1<<OCIE1A)
 #define DISABLE_STEPPER_DRIVER_INTERRUPT() TIMSK1 &= ~(1<<OCIE1A)
 
+
+
+// Interrupt service routines for the left motor's quadrature encoder
+void HandleXMotorInterruptA()
+{
+	// Test transition; since the interrupt will only fire on 'rising' we don't need to read pin A
+	_X_Curr_sens=analogRead(A0);
+	_XEncoderBSet = digitalReadFast(c_XEncoderPinB);   // read the input pin
+	_XEncoderISet = digitalReadFast(c_XEncoderPinI);
+	_XMinPinSet = digitalRead(X_MIN_PIN);
+	_XMaxPinSet = digitalRead(X_MAX_PIN);
+	// and adjust counter + if A leads B
+	#ifdef LeftEncoderIsReversed
+	_XEncoderTicks -= _XEncoderBSet ? -1 : +1;
+	if (_XEncoderISet == 0)
+	_XEncoderIndex -= _XEncoderBSet ? -1 : +1;
+	#else
+	_XEncoderTicks += _XEncoderBSet ? -1 : +1;
+	#endif
+}
+
+// Interrupt service routines for the right motor's quadrature encoder
+void HandleYMotorInterruptA()
+{
+	// Test transition; since the interrupt will only fire on 'rising' we don't need to read pin A
+	_Y_Curr_sens=analogRead(A1);
+	_YEncoderBSet = digitalReadFast(c_YEncoderPinB);   // read the input pin
+	_YEncoderISet = digitalReadFast(c_XEncoderPinI);
+	_YMinPinSet = digitalRead(Y_MIN_PIN);
+	_YMaxPinSet = digitalRead(Y_MAX_PIN);
+	// and adjust counter + if A leads B
+	#ifdef RightEncoderIsReversed
+	_YEncoderTicks -= _YEncoderBSet ? -1 : +1;
+	if (_YEncoderISet == 0)
+	_YEncoderIndex -= _YEncoderBSet ? -1 : +1;
+	#else
+	_YEncoderTicks += _YEncoderBSet ? -1 : +1;
+	#endif
+}
 
 void checkHitEndstops()
 {
@@ -345,7 +430,41 @@ ISR(TIMER1_COMPA_vect)
     // Set directions TO DO This should be done once during init of trapezoid. Endstops -> interrupt
     out_bits = current_block->direction_bits;
 
-
+#ifdef DCXYMOT
+// DIRECTION from VID ?
+/*
+	if(Output<0)
+	{
+		digitalWrite(X_DIR_PIN, HIGH); //don't know exactly how you set this in your situation
+		//speed = -1*Output
+	}
+	else
+	{
+		digitalWrite(X_DIR_PIN, LOW);
+		//speed = Output;
+	}
+	
+	*/
+// DIRECTION from planner
+	if ((out_bits & (1<<X_AXIS)) != 0){
+		digitalWrite(X_DIR_PIN, HIGH);
+	}
+	else{
+		digitalWrite(X_DIR_PIN, LOW);
+	}
+	if ((out_bits & (1<<Y_AXIS)) != 0){
+		digitalWrite(Y_DIR_PIN, HIGH);
+	}
+	else{
+		digitalWrite(Y_DIR_PIN, LOW);
+	}
+	
+	XVelocity = _XEncoderTicks - XPrevTick;  // needs to be corrected for frame variation
+	YVelocity = _YEncoderTicks - YPrevTick;
+	XPrevTick += XVelocity;			// it's actually XPrevTick = XEncoderTicks but I don't want to reread Xencoder in case an interrupt just happens
+	YPrevTick += YVelocity;
+	
+#else //DCXYMOT
     // Set the direction bits (X_AXIS=A_AXIS and Y_AXIS=B_AXIS for COREXY)
     if((out_bits & (1<<X_AXIS))!=0){
       #ifdef DUAL_X_CARRIAGE
@@ -360,7 +479,7 @@ ISR(TIMER1_COMPA_vect)
             WRITE(X_DIR_PIN, INVERT_X_DIR);
         }
       #else
-        WRITE(X_DIR_PIN, INVERT_X_DIR);
+      //  WRITE(X_DIR_PIN, INVERT_X_DIR);
       #endif        
       count_direction[X_AXIS]=-1;
     }
@@ -377,19 +496,22 @@ ISR(TIMER1_COMPA_vect)
             WRITE(X_DIR_PIN, !INVERT_X_DIR);
         }
       #else
-        WRITE(X_DIR_PIN, !INVERT_X_DIR);
+       // WRITE(X_DIR_PIN, !INVERT_X_DIR);
       #endif        
       count_direction[X_AXIS]=1;
     }
+	
+	
+	
     if((out_bits & (1<<Y_AXIS))!=0){
-      WRITE(Y_DIR_PIN, INVERT_Y_DIR);
+    //  WRITE(Y_DIR_PIN, INVERT_Y_DIR);
       count_direction[Y_AXIS]=-1;
     }
     else{
-      WRITE(Y_DIR_PIN, !INVERT_Y_DIR);
+    //  WRITE(Y_DIR_PIN, !INVERT_Y_DIR);
       count_direction[Y_AXIS]=1;
     }
-
+    #endif //DCXYMOT
     // Set direction en check limit switches
     #ifndef COREXY
     if ((out_bits & (1<<X_AXIS)) != 0) {   // stepping along -X axis
@@ -559,7 +681,7 @@ ISR(TIMER1_COMPA_vect)
               WRITE(X_STEP_PIN, !INVERT_X_STEP_PIN);
           }
         #else
-          WRITE(X_STEP_PIN, !INVERT_X_STEP_PIN);
+         // WRITE(X_STEP_PIN, !INVERT_X_STEP_PIN);
         #endif        
           counter_x -= current_block->step_event_count;
           count_position[X_AXIS]+=count_direction[X_AXIS];   
@@ -575,16 +697,16 @@ ISR(TIMER1_COMPA_vect)
               WRITE(X_STEP_PIN, INVERT_X_STEP_PIN);
           }
         #else
-          WRITE(X_STEP_PIN, INVERT_X_STEP_PIN);
+       //   WRITE(X_STEP_PIN, INVERT_X_STEP_PIN);
         #endif
         }
 
         counter_y += current_block->steps_y;
         if (counter_y > 0) {
-          WRITE(Y_STEP_PIN, !INVERT_Y_STEP_PIN);
+         // WRITE(Y_STEP_PIN, !INVERT_Y_STEP_PIN);
           counter_y -= current_block->step_event_count;
           count_position[Y_AXIS]+=count_direction[Y_AXIS];
-          WRITE(Y_STEP_PIN, INVERT_Y_STEP_PIN);
+        //  WRITE(Y_STEP_PIN, INVERT_Y_STEP_PIN);
         }
 
       counter_z += current_block->steps_z;
@@ -617,8 +739,8 @@ ISR(TIMER1_COMPA_vect)
       if(step_events_completed >= current_block->step_event_count) break;
     }
     // Calculare new timer value
-    unsigned short timer;
-    unsigned short step_rate;
+    static unsigned short timer;
+    static unsigned short step_rate;
     if (step_events_completed <= (unsigned long int)current_block->accelerate_until) {
 
       MultiU24X24toH16(acc_step_rate, acceleration_time, current_block->acceleration_rate);
@@ -746,6 +868,10 @@ void st_init()
 {
   digipot_init(); //Initialize Digipot Motor Current
   microstep_init(); //Initialize Microstepping Pins
+  //PID XposPID(&Input, &Output, &Setpoint,2,5,1, DIRECT);
+  //PID YposPID(&Input, &Output, &Setpoint,2,5,1, DIRECT);
+  VID XvelVID(&XVelocity, &XVOutput, &XVSetpoint,2,5,1, DIRECT);
+  VID YvelVID(&YVelocity, &XVOutput, &XVSetpoint,2,5,1, DIRECT);
 
   //Initialize Dir Pins
   #if defined(X_DIR_PIN) && X_DIR_PIN > -1
@@ -895,6 +1021,38 @@ void st_init()
     WRITE(E2_STEP_PIN,INVERT_E_STEP_PIN);
     disable_e2();
   #endif
+  #if defined (DCXYMOT)
+     //Setup Channel X
+     pinMode(12, OUTPUT); //Initiates Motor Channel Y pin
+     //pinMode(9, OUTPUT); //Initiates Brake Channel Y pin
+     pinMode(A0,INPUT);
+     pinMode(X_MIN_PIN,INPUT_PULLUP);
+     pinMode(X_MAX_PIN,INPUT_PULLUP);
+     pinMode(X_JOY_UP,INPUT_PULLUP);
+     pinMode(X_JOY_DOWN,INPUT_PULLUP);
+	 //Setup Channel Y
+	 pinMode(13, OUTPUT); //Initiates Motor Channel Y pin
+	 //pinMode(11, OUTPUT); //Initiates Brake Channel Y pin
+	 pinMode(A1,INPUT);
+	 pinMode(Y_MIN_PIN,INPUT_PULLUP);
+	 pinMode(Y_MIN_PIN,INPUT_PULLUP);
+	 pinMode(Y_JOY_UP,INPUT_PULLUP);
+	 pinMode(Y_JOY_DOWN,INPUT_PULLUP);
+     // Quadrature encoders
+     // X encoder
+     pinMode(c_XEncoderPinA, INPUT);      // sets pin A as input
+     digitalWrite(c_XEncoderPinA, LOW);  // turn on pullup resistors
+     pinMode(c_XEncoderPinB, INPUT);      // sets pin B as input
+     digitalWrite(c_XEncoderPinB, LOW);  // turn on pullup resistors
+     attachInterrupt(c_XEncoderInterrupt, HandleXMotorInterruptA, RISING);
+     
+     // Y encoder
+     pinMode(c_YEncoderPinA, INPUT);      // sets pin A as input
+     digitalWrite(c_YEncoderPinA, LOW);  // turn on pullup resistors
+     pinMode(c_YEncoderPinB, INPUT);      // sets pin B as input
+     digitalWrite(c_YEncoderPinB, LOW);  // turn on pullup resistors
+     attachInterrupt(c_YEncoderInterrupt, HandleYMotorInterruptA, RISING);
+	 #endif
 
   // waveform generation = 0100 = CTC
   TCCR1B &= ~(1<<WGM13);
