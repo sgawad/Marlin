@@ -17,7 +17,7 @@
  *    The parameters specified here are those for for which we can't set up 
  *    reliable defaults, so we need to have the user set them.
  ***************************************************************************/
-VID::VID(double* Input, double* Output, double* Setpoint,
+VID::VID(volatile double* Input, volatile double* Output, volatile double* Setpoint,
         double Kp, double Ki, double Kd, int ControllerDirection)
 {
 	
@@ -47,9 +47,10 @@ VID::VID(double* Input, double* Output, double* Setpoint,
 bool VID::Compute()
 {
    if(!inAuto) return false;
-   unsigned long now = millis();
-   unsigned long timeChange = (now - lastTime);
-   if(timeChange>=SampleTime)
+   //unsigned long now = millis();			//millis don't get an update while in an interrupt and seem not to increment at all why?
+   //unsigned long timeChange = (now - lastTime);
+   //if(timeChange>=SampleTime)
+   if (1)
    {
       /*Compute all the working error variables*/
 	  double input = *myInput;
@@ -60,16 +61,15 @@ bool VID::Compute()
       double dInput = (input - lastInput);
  
       /*Compute PID Output*/
-	  //output = prevOutput - Kp*(input - prevInput) + Ki*error - Kd*(Input - 2*prevInput - prevPrevInput);
-      double output = lastOutput - kp*(dInput) + ITerm - kd*(input - 2*lastInput - lastlastInput);
-      
+	  //*myOutput = lastOutput - kp*(dInput) + ITerm - kd*(input - 2*lastInput - lastlastInput);
+      double output = lastOutput + kp*(error-lastError) - kd*(input - 2*lastInput - lastlastInput);
 	  if(output > outMax) output = outMax;
       else if(output < outMin) output = outMin;
 	  *myOutput = output;
 	  
       /*Remember some variables for next time*/
       lastInput = input;
-      lastTime = now;
+      //lastTime = now;
 	  lastOutput = output;
 	  lastlastError =  lastError;
 	  lastError = error;

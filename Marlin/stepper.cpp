@@ -63,6 +63,7 @@ volatile static unsigned long step_events_completed; // The number of step event
 static long acceleration_time, deceleration_time;
 //static unsigned long accelerate_until, decelerate_after, acceleration_rate, initial_rate, final_rate, nominal_rate;
 static volatile unsigned short acc_step_rate; // needed for deceleration start point
+static unsigned short step_rate;
 static char step_loops;
 static unsigned short OCR1A_nominal;
 static unsigned short step_loops_nominal;
@@ -103,8 +104,8 @@ volatile signed char count_direction[NUM_AXIS] = { 1, 1, 1, 1};
 	volatile int _X_Curr_sens;
 	// X PID vars
 	long XPrevTick;
-	double XVelocity=0;  //velocity input
-	double XVSetpoint, XVOutput;
+	volatile double XVelocity=0;  //velocity input
+	volatile double XVSetpoint, XVOutput;
 	// Y encoder Int + Var def
 	volatile bool _YEncoderBSet;
 	volatile bool _YEncoderISet;
@@ -117,8 +118,8 @@ volatile signed char count_direction[NUM_AXIS] = { 1, 1, 1, 1};
 	volatile int _Y_Curr_sens;
 	// Y PID vars
 	long YPrevTick;
-	double YVelocity=0;  //velocity input
-	double YVSetpoint, YVOutput;
+	volatile double YVelocity=0;  //velocity input
+	volatile double YVSetpoint, YVOutput;
 	  //PID XposPID(&Input, &Output, &Setpoint,2,5,1, DIRECT);
 	  //PID YposPID(&Input, &Output, &Setpoint,2,5,1, DIRECT);
 	  VID XvelVID(&XVelocity, &XVOutput, &XVSetpoint,2,5,1, DIRECT);
@@ -466,12 +467,12 @@ ISR(TIMER1_COMPA_vect)
 	YVelocity = _YEncoderTicks - YPrevTick;  // problem is that XYVelocity will be always about 1...
 	XPrevTick += XVelocity;			// it's actually XPrevTick = XEncoderTicks but I don't want to reread Xencoder in case an interrupt just happens
 	YPrevTick += YVelocity;
-	XVSetpoint=(acc_step_rate>>8)*current_block->steps_x/current_block->step_event_count;   // vraiment pas bon on recalcul un truc qui change pas et on compense pas l'erreure
-	YVSetpoint=(acc_step_rate>>8)*current_block->steps_y/current_block->step_event_count;   //faudrait viser le target et corriger la trajectoire...
+	XVSetpoint=(step_rate>>8)*current_block->steps_x/current_block->step_event_count;   // vraiment pas bon on recalcul un truc qui change pas et on compense pas l'erreure
+	YVSetpoint=(step_rate>>8)*current_block->steps_y/current_block->step_event_count;   //faudrait viser le target et corriger la trajectoire...
 	XvelVID.Compute();
-	YvelVID.Compute();
-	analogWrite(X_PWM_PIN,XVOutput);
-	analogWrite(Y_PWM_PIN,YVOutput);
+	analogWrite(X_PWM_PIN,abs(XVOutput));
+	YvelVID.Compute();												 // faut prendre l'abs() avant d'ecrire a cause que le signe c'est la direction
+	analogWrite(Y_PWM_PIN,abs(YVOutput));
 #else //DCXYMOT
     // Set the direction bits (X_AXIS=A_AXIS and Y_AXIS=B_AXIS for COREXY)
     if((out_bits & (1<<X_AXIS))!=0){
@@ -748,7 +749,7 @@ ISR(TIMER1_COMPA_vect)
     }
     // Calculare new timer value
     static unsigned short timer;
-    static unsigned short step_rate;
+    //static unsigned short step_rate;
     if (step_events_completed <= (unsigned long int)current_block->accelerate_until) {
 
       MultiU24X24toH16(acc_step_rate, acceleration_time, current_block->acceleration_rate);
@@ -759,6 +760,7 @@ ISR(TIMER1_COMPA_vect)
         acc_step_rate = current_block->nominal_rate;
 
       // step_rate to timer interval
+	  step_rate=acc_step_rate;
       timer = calc_timer(acc_step_rate);
       OCR1A = timer;
       acceleration_time += timer;
@@ -810,6 +812,8 @@ ISR(TIMER1_COMPA_vect)
     // If current block is finished, reset pointer
     if (step_events_completed >= current_block->step_event_count) {
       current_block = NULL;
+	  analogWrite(X_PWM_PIN,0);  //arrete le moteur a la fin du block  faudrait verifier que la position est bonne
+	  analogWrite(Y_PWM_PIN,0);
       plan_discard_current_block();
     }
   }
@@ -1028,16 +1032,16 @@ YvelVID.SetMode(AUTOMATIC);
   #endif
   #if defined (DCXYMOT)
      //Setup Channel X
-     pinMode(12, OUTPUT); //Initiates Motor Channel Y pin
-     //pinMode(9, OUTPUT); //Initiates Brake Channel Y pin
+     pinMode(X_DIR_PIN, OUTPUT); //Initiates direction Channel X pin
+     pinMode(X_PWM_PIN, OUTPUT); //Initiates PWM Channel X pin
      pinMode(A0,INPUT);
      pinMode(X_MIN_PIN,INPUT_PULLUP);
      pinMode(X_MAX_PIN,INPUT_PULLUP);
      pinMode(X_JOY_UP,INPUT_PULLUP);
      pinMode(X_JOY_DOWN,INPUT_PULLUP);
 	 //Setup Channel Y
-	 pinMode(13, OUTPUT); //Initiates Motor Channel Y pin
-	 //pinMode(11, OUTPUT); //Initiates Brake Channel Y pin
+	 pinMode(Y_DIR_PIN, OUTPUT); //Initiates Modirectiontor Channel Y pin
+	 pinMode(Y_PWM_PIN, OUTPUT); //Initiates PWM Channel Y pin
 	 pinMode(A1,INPUT);
 	 pinMode(Y_MIN_PIN,INPUT_PULLUP);
 	 pinMode(Y_MIN_PIN,INPUT_PULLUP);

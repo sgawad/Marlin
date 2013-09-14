@@ -330,7 +330,7 @@
 	#define c_YEncoderPinA 18
 	#define c_YEncoderPinB 24
 	//Ardino motor shield REV3
-	//Function			pins per Ch. A	pins per Ch. B
+	//Function			pins per Ch. X	pins per Ch. Y
 	//Direction			D12				D13
 	//PWM				D3				D11
 	//Brake				D9				D8
@@ -409,14 +409,14 @@
     #define Y_DIR_PIN          61
     #define Y_ENABLE_PIN       56*/
     #define Y_MIN_PIN          35  //was 14
-    #define Y_MAX_PIN          36  //was 15
+    #define Y_MAX_PIN          39  //was 15
 
 
     #define Z_STEP_PIN         46
     #define Z_DIR_PIN          48
     #define Z_ENABLE_PIN       62
-    #define Z_MIN_PIN          18
-    #define Z_MAX_PIN          19
+    #define Z_MIN_PIN          21    //was 18
+    #define Z_MAX_PIN          23		//was 19
 
     #define Z2_STEP_PIN        36
     #define Z2_DIR_PIN         34
