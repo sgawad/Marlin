@@ -60,7 +60,8 @@ bool VID::Compute()
       double dInput = (input - lastInput);
  
       /*Compute PID Output*/
-      double output = kp * error + ITerm- kd * dInput;
+	  //output = prevOutput - Kp*(input - prevInput) + Ki*error - Kd*(Input - 2*prevInput - prevPrevInput);
+      double output = lastOutput - kp*(dInput) + ITerm - kd*(input - 2*lastInput - lastlastInput);
       
 	  if(output > outMax) output = outMax;
       else if(output < outMin) output = outMin;
@@ -69,6 +70,9 @@ bool VID::Compute()
       /*Remember some variables for next time*/
       lastInput = input;
       lastTime = now;
+	  lastOutput = output;
+	  lastlastError =  lastError;
+	  lastError = error;
 	  return true;
    }
    else return false;
@@ -161,6 +165,9 @@ void VID::Initialize()
 {
    ITerm = *myOutput;
    lastInput = *myInput;
+   lastOutput = *myOutput;
+	lastError = 0;
+    lastlastError =  0;
    if(ITerm > outMax) ITerm = outMax;
    else if(ITerm < outMin) ITerm = outMin;
 }

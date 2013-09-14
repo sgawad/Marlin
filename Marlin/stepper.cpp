@@ -102,7 +102,7 @@ volatile signed char count_direction[NUM_AXIS] = { 1, 1, 1, 1};
 	volatile unsigned long _Xblock_start_=0;
 	volatile int _X_Curr_sens;
 	// X PID vars
-	long XPrevTick
+	long XPrevTick;
 	double XVelocity=0;  //velocity input
 	double XVSetpoint, XVOutput;
 	// Y encoder Int + Var def
@@ -116,10 +116,13 @@ volatile signed char count_direction[NUM_AXIS] = { 1, 1, 1, 1};
 	volatile unsigned long _Yblock_start_=0;
 	volatile int _Y_Curr_sens;
 	// Y PID vars
-	long YPrevTick
+	long YPrevTick;
 	double YVelocity=0;  //velocity input
 	double YVSetpoint, YVOutput;
-
+	  //PID XposPID(&Input, &Output, &Setpoint,2,5,1, DIRECT);
+	  //PID YposPID(&Input, &Output, &Setpoint,2,5,1, DIRECT);
+	  VID XvelVID(&XVelocity, &XVOutput, &XVSetpoint,2,5,1, DIRECT);
+	  VID YvelVID(&YVelocity, &YVOutput, &YVSetpoint,2,5,1, DIRECT);
 	//STOPS and joystic //pin defs in PIN.h
 
 	volatile bool _XMinPinSet;
@@ -459,11 +462,16 @@ ISR(TIMER1_COMPA_vect)
 		digitalWrite(Y_DIR_PIN, LOW);
 	}
 	
-	XVelocity = _XEncoderTicks - XPrevTick;  // needs to be corrected for frame variation
-	YVelocity = _YEncoderTicks - YPrevTick;
+	XVelocity = _XEncoderTicks - XPrevTick;  // needs to be corrected for frame variation timer=~250 step_loops= 1,2,4
+	YVelocity = _YEncoderTicks - YPrevTick;  // problem is that XYVelocity will be always about 1...
 	XPrevTick += XVelocity;			// it's actually XPrevTick = XEncoderTicks but I don't want to reread Xencoder in case an interrupt just happens
 	YPrevTick += YVelocity;
-	
+	XVSetpoint=(acc_step_rate>>8)*current_block->steps_x/current_block->step_event_count;   // vraiment pas bon on recalcul un truc qui change pas et on compense pas l'erreure
+	YVSetpoint=(acc_step_rate>>8)*current_block->steps_y/current_block->step_event_count;   //faudrait viser le target et corriger la trajectoire...
+	XvelVID.Compute();
+	YvelVID.Compute();
+	analogWrite(X_PWM_PIN,XVOutput);
+	analogWrite(Y_PWM_PIN,YVOutput);
 #else //DCXYMOT
     // Set the direction bits (X_AXIS=A_AXIS and Y_AXIS=B_AXIS for COREXY)
     if((out_bits & (1<<X_AXIS))!=0){
@@ -868,11 +876,8 @@ void st_init()
 {
   digipot_init(); //Initialize Digipot Motor Current
   microstep_init(); //Initialize Microstepping Pins
-  //PID XposPID(&Input, &Output, &Setpoint,2,5,1, DIRECT);
-  //PID YposPID(&Input, &Output, &Setpoint,2,5,1, DIRECT);
-  VID XvelVID(&XVelocity, &XVOutput, &XVSetpoint,2,5,1, DIRECT);
-  VID YvelVID(&YVelocity, &XVOutput, &XVSetpoint,2,5,1, DIRECT);
-
+XvelVID.SetMode(AUTOMATIC);
+YvelVID.SetMode(AUTOMATIC);
   //Initialize Dir Pins
   #if defined(X_DIR_PIN) && X_DIR_PIN > -1
     SET_OUTPUT(X_DIR_PIN);

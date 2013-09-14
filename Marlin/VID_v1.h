@@ -70,8 +70,7 @@ class VID
 	//   what these values are.  with pointers we'll just know.
 	
 	unsigned long lastTime;
-	double ITerm, lastInput;
-
+	double ITerm, lastInput, lastlastInput, lastOutput, lastlastError, lastError;
 	unsigned long SampleTime;
 	double outMin, outMax;
 	bool inAuto;
